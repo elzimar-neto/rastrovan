@@ -9,14 +9,18 @@
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
         #map { flex-grow: 1; width: 100%; }
-        .header { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center; border: 1px solid #007bff; width: 80%; }
-        .footer { background: white; padding: 10px; text-align: center; font-size: 0.7rem; color: #666; border-top: 1px solid #007bff; }
+        .header { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center; border: 1px solid #007bff; width: 85%; }
+        .footer { background: white; padding: 12px; text-align: center; font-size: 0.75rem; color: #555; border-top: 1px solid #007bff; }
+        .legenda { font-size: 0.65rem; color: #666; margin-bottom: 5px; }
     </style>
 </head>
 <body>
-    <div class="header">🚐 <b>RastroVan Iguaíba 1.0</b><br><small>Linha: Iguaíba - Mercado Central</small></div>
+    <div class="header">🚐 <b>RastroVan Iguaíba 1.0</b><br><small>Linha Iguaíba - Mercado Central</small></div>
     <div id="map"></div>
-    <div class="footer">Desenvolvido por <b>Elzimar Neto</b>. © 2026 | elzimar.neto@gmail.com</div>
+    <div class="footer">
+        <div class="legenda">🔵 Rota Centro | 🟢 Rota Bairro</div>
+        Desenvolvido por <b>Elzimar José de Carvalho Neto</b>. © 2026<br>elzimar.neto@gmail.com
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module">
@@ -39,19 +43,20 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const vanIcon = L.icon({ iconUrl: 'van.png', iconSize: [45, 45], iconAnchor: [22, 45] });
-        let markers = {};
-        let rotaDinamica = L.polyline([], { color: '#007bff', weight: 4, opacity: 0.6, dashArray: '5, 10' }).addTo(map);
+        
+        // Linhas de rota com cores diferentes
+        let rotaCentro = L.polyline([], { color: '#007bff', weight: 4, opacity: 0.6, dashArray: '5, 8' }).addTo(map);
+        let rotaBairro = L.polyline([], { color: '#28a745', weight: 4, opacity: 0.6, dashArray: '5, 8' }).addTo(map);
 
-        // 1. ESCUTA A ROTA APRENDIDA
-        onValue(ref(db, 'rota_aprendida'), (snapshot) => {
-            const pontos = snapshot.val();
-            if (pontos) {
-                const listaCoords = Object.values(pontos).map(p => [p.lat, p.lng]);
-                rotaDinamica.setLatLngs(listaCoords); // Atualiza a linha no mapa
-            }
+        // 1. Escuta as duas rotas aprendidas
+        onValue(ref(db, 'rota_centro'), (snap) => {
+            if (snap.val()) rotaCentro.setLatLngs(Object.values(snap.val()).map(p => [p.lat, p.lng]));
+        });
+        onValue(ref(db, 'rota_bairro'), (snap) => {
+            if (snap.val()) rotaBairro.setLatLngs(Object.values(snap.val()).map(p => [p.lat, p.lng]));
         });
 
-        // 2. ESCUTA AS VANS ATIVAS
+        let markers = {};
         onValue(ref(db, 'vans'), (snapshot) => {
             const data = snapshot.val();
             const agora = Date.now();
@@ -60,9 +65,9 @@
                 for (let id in data) {
                     const { lat, lng, nome, timestamp, sentido } = data[id];
                     const diff = Math.floor((agora - timestamp) / 1000);
-                    const popupText = `<b>Van: ${nome}</b><br>${sentido}<br><small>Visto há ${diff}s</small>`;
-                    if (markers[id]) { markers[id].setLatLng([lat, lng]).setPopupContent(popupText); }
-                    else { markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map).bindPopup(popupText, { autoClose: false }).openPopup(); }
+                    const popupH = `<b>${nome}</b><br><small>${sentido}</small><br><small>Visto há ${diff}s</small>`;
+                    if (markers[id]) { markers[id].setLatLng([lat, lng]).setPopupContent(popupH); }
+                    else { markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map).bindPopup(popupH, { autoClose: false }).openPopup(); }
                 }
             }
         });
