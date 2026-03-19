@@ -5,14 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vans Iguaíba - Realtime</title>
     <link rel="icon" type="image/png" href="van.png">
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
-        #map { flex-grow: 1; width: 100%; }
-        .header { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; padding: 8px 15px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-weight: bold; color: #007bff; border: 1px solid #007bff; font-size: 0.8rem; text-align: center; }
-        .footer { background: white; padding: 10px; text-align: center; font-size: 0.8rem; border-top: 2px solid #007bff; z-index: 1000; }
-        .btn-alerta { margin-top: 5px; background: #ffc107; border: none; padding: 5px 10px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 0.7rem; }
-        .distancia-info { color: #dc3545; font-weight: bold; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; background: #f8f9fa; }
+        #map { flex-grow: 1; width: 100%; border-bottom: 2px solid #007bff; }
+        .header { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; padding: 10px 15px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-weight: bold; color: #007bff; border: 1px solid #007bff; font-size: 0.8rem; text-align: center; width: 85%; max-width: 400px; }
+        .btn-alerta { margin-top: 5px; background: #ffc107; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 0.75rem; color: #333; }
+        .footer { background: white; padding: 12px; text-align: center; font-size: 0.75rem; color: #555; z-index: 1000; }
+        .footer b { color: #007bff; }
+        .copyright { margin-top: 5px; font-size: 0.7rem; color: #888; border-top: 1px solid #eee; padding-top: 5px; }
+        .dist-label { color: #dc3545; font-weight: bold; display: block; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -20,10 +23,14 @@
         🚐 Iguaíba ↔ Mercado Central<br>
         <button class="btn-alerta" id="btnAlerta">🔔 Me avise quando a van estiver perto</button>
     </div>
-    
     <div id="map"></div>
-    
-    <div class="footer">Vans ativas: <span id="contador" style="font-weight:bold; color:#28a745">0</span> | Linha atualizada via GPS.</div>
+    <div class="footer">
+        Vans ativas: <span id="contador" style="font-weight:bold; color:#28a745">0</span><br>
+        <div class="copyright">
+            Desenvolvido por <b>Elzimar José de Carvalho Neto</b>.<br>
+            © Copyright 2026, todos os direitos reservados. | elzimar.neto@gmail.com
+        </div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module">
@@ -42,7 +49,7 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const map = L.map('map').setView([-2.5307, -44.3068], 13);
+        const map = L.map('map', { minZoom: 11 }).setView([-2.5307, -44.3068], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const vanIcon = L.icon({ iconUrl: 'van.png', iconSize: [45, 45], iconAnchor: [22, 45], popupAnchor: [0, -45] });
@@ -50,19 +57,17 @@
         let userPos = null;
         let alertaAtivo = false;
 
-        // Ativar alerta de proximidade
         document.getElementById('btnAlerta').onclick = () => {
             navigator.geolocation.getCurrentPosition(p => {
                 userPos = p.coords;
                 alertaAtivo = true;
-                alert("Alerta ativado! Seu celular vibrará/avisará quando a van estiver a menos de 1km.");
-                L.marker([userPos.latitude, userPos.longitude]).addTo(map).bindPopup("Você está aqui").openPopup();
+                alert("Alerta ativado! O sistema avisará quando a van estiver perto.");
+                L.marker([userPos.latitude, userPos.longitude]).addTo(map).bindPopup("Você").openPopup();
             });
         };
 
-        // Função para calcular distância (KM)
         function calcDist(lat1, lon1, lat2, lon2) {
-            const R = 6371; 
+            const R = 6371;
             const dLat = (lat2-lat1) * Math.PI / 180;
             const dLon = (lon2-lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
@@ -79,30 +84,30 @@
             if (data) {
                 for (let id in data) {
                     total++;
-                    const { lat, lng, nome, timestamp } = data[id];
-                    const diffSegundos = Math.floor((agora - timestamp) / 1000);
-                    const tempoTexto = diffSegundos < 60 ? `${diffSegundos}s atrás` : `${Math.floor(diffSegundos/60)}min atrás`;
+                    const { lat, lng, nome, timestamp, sentido } = data[id];
+                    const diffS = Math.floor((agora - timestamp) / 1000);
+                    const tempoTexto = diffS < 60 ? `${diffS}s atrás` : `${Math.floor(diffS/60)}min atrás`;
+                    const iconeS = sentido === "Sentido Centro" ? "🏙️" : "🏡";
                     
-                    let distTexto = "";
+                    let distT = "";
                     if (alertaAtivo && userPos) {
                         const d = calcDist(userPos.latitude, userPos.longitude, lat, lng);
-                        distTexto = `<br><span class="distancia-info">Distância: ${d.toFixed(1)} km</span>`;
-                        if (d < 0.8) { // Menos de 800 metros
-                            if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
-                            alert(`A van de ${nome} está chegando!`);
-                            alertaAtivo = false; // Desativa para não repetir o alerta sem parar
+                        distT = `<br><span class="dist-label">Distância: ${d.toFixed(1)} km</span>`;
+                        if (d < 0.8) {
+                            if (window.navigator.vibrate) window.navigator.vibrate([300, 100, 300]);
+                            alert(`A van de ${nome} (${sentido}) está chegando!`);
+                            alertaAtivo = false;
                         }
                     }
 
+                    const popupHTML = `<b>Van: ${nome}</b><br><b style="color:#007bff">${iconeS} ${sentido}</b><br><small>Atualizado: ${tempoTexto}${distT}</small>`;
+
                     if (markers[id]) {
-                        markers[id].setLatLng([lat, lng]).setPopupContent(`<b>Van: ${nome}</b><br>Última atualização: ${tempoTexto}${distTexto}`);
+                        markers[id].setLatLng([lat, lng]).setPopupContent(popupHTML);
                     } else {
-                        markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map)
-                            .bindPopup(`<b>Van: ${nome}</b><br>Última atualização: ${tempoTexto}${distTexto}`, { autoClose: false, closeOnClick: false }).openPopup();
+                        markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map).bindPopup(popupHTML, { autoClose: false, closeOnClick: false }).openPopup();
                     }
-                    
-                    // Se não atualiza há mais de 2 minutos, fica transparente (sinal caiu)
-                    markers[id].setOpacity(diffSegundos > 120 ? 0.5 : 1);
+                    markers[id].setOpacity(diffS > 120 ? 0.5 : 1);
                 }
             }
             document.getElementById('contador').innerText = total;
