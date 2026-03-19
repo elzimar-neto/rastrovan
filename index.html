@@ -3,28 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Iguaíba - Mercado Central</title>
+    <title>Vans Iguaíba - Grande Ilha</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        #map { height: 75vh; width: 100%; border-radius: 12px; margin-top: 10px; border: 2px solid #ddd; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 15px; background: #f0f2f5; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
-        h2 { margin-top: 0; color: #007bff; font-size: 1.2rem; }
-        button { 
-            padding: 15px 20px; font-size: 16px; cursor: pointer; border-radius: 8px; border: none; 
-            background: #28a745; color: white; font-weight: bold; width: 100%; transition: 0.3s;
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: #f4f7f6; }
+        #map { height: 100vh; width: 100%; position: absolute; z-index: 1; }
+        
+        /* Painel Flutuante */
+        .overlay {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            z-index: 1000; background: white; padding: 15px;
+            border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            text-align: center;
         }
-        button.stop { background: #dc3545; }
-        #status { font-weight: bold; margin-bottom: 15px; display: block; }
+
+        h2 { margin: 0 0 10px 0; font-size: 1.1rem; color: #007bff; }
+        
+        .btn-motorista {
+            background: #28a745; color: white; border: none; padding: 12px 20px;
+            border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;
+            transition: 0.3s;
+        }
+
+        .btn-motorista.active { background: #dc3545; }
+
+        /* Estilo do Balão (Popup) */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            padding: 5px;
+        }
+        .van-info { text-align: center; }
+        .van-info strong { color: #007bff; font-size: 1.1rem; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>🚐 Rastreio Iguaíba - Mercado</h2>
-        <span id="status">Status: Offline</span>
-        <button id="btnAction">Iniciar Minha Rota (Motorista)</button>
+    <div class="overlay">
+        <h2>🚐 Linha: Iguaíba - Mercado</h2>
+        <div id="status-area">
+            <button id="btnAction" class="btn-motorista">Sou Motorista: Iniciar Rota</button>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -32,7 +51,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD6xIqgV-XzwNScNyN6mc4l35tRJ7sc8fY",
@@ -47,60 +66,55 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // Mapa focado na região de São Luís / Iguaíba
-        const map = L.map('map').setView([-2.5307, -44.3068], 12);
+        // --- CONFIGURAÇÃO DO MAPA ---
+        const limitesIlha = L.latLngBounds(L.latLng(-2.75, -44.50), L.latLng(-2.35, -43.90));
+        const map = L.map('map', {
+            maxBounds: limitesIlha,
+            minZoom: 11
+        }).setView([-2.5307, -44.3068], 13);
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // --- ÍCONE PERSONALIZADO DA VAN ---
+        const vanIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1048/1048314.png', // Ícone de Van
+            iconSize: [40, 40],
+            iconAnchor: [20, 40],
+            popupAnchor: [0, -40]
+        });
 
         let watchID = null;
         let markers = {};
         const btnAction = document.getElementById('btnAction');
-        const statusText = document.getElementById('status');
 
-        // --- LÓGICA DO MOTORISTA ---
+        // --- FUNÇÃO MOTORISTA ---
         btnAction.addEventListener('click', () => {
             if (!watchID) {
-                const nomeMotorista = prompt("Digite seu nome ou Identificação da Van:");
-                
-                if (!nomeMotorista || nomeMotorista.trim() === "") {
-                    alert("Você precisa digitar um nome para iniciar.");
-                    return;
-                }
+                const nome = prompt("Nome do Motorista ou Placa:");
+                if (!nome) return;
+
+                btnAction.innerText = "Parar Transmissão (Em Rota)";
+                btnAction.classList.add('active');
 
                 watchID = navigator.geolocation.watchPosition((pos) => {
                     const { latitude, longitude } = pos.coords;
-                    const vanRef = ref(db, 'vans/' + nomeMotorista);
+                    const vanRef = ref(db, 'vans/' + nome);
                     
-                    set(vanRef, {
-                        lat: latitude,
-                        lng: longitude,
-                        nome: nomeMotorista,
-                        timestamp: Date.now()
-                    });
-
-                    // Remove do mapa automaticamente se o motorista fechar o app/perder conexão
-                    onDisconnect(vanRef).remove();
-
-                    statusText.innerText = "Status: Transmitindo como " + nomeMotorista;
-                    statusText.style.color = "#28a745";
-                    btnAction.innerText = "Parar de Transmitir";
-                    btnAction.classList.add('stop');
-                }, (err) => alert("Erro no GPS: " + err.message), { enableHighAccuracy: true });
+                    set(vanRef, { lat: latitude, lng: longitude, nome: nome });
+                    onDisconnect(vanRef).remove(); // Se fechar o navegador, remove do mapa
+                }, (err) => alert("Erro GPS: " + err.message), 
+                { enableHighAccuracy: true, maximumAge: 0 });
 
             } else {
-                // Parar transmissão
-                if(confirm("Deseja parar de compartilhar sua localização?")) {
-                    navigator.geolocation.clearWatch(watchID);
-                    watchID = null;
-                    location.reload(); // Recarrega para limpar os estados
-                }
+                if(confirm("Deseja encerrar a transmissão?")) location.reload();
             }
         });
 
-        // --- LÓGICA DO PASSAGEIRO (VER NO MAPA) ---
+        // --- FUNÇÃO PASSAGEIRO (LER VANS) ---
         onValue(ref(db, 'vans'), (snapshot) => {
             const data = snapshot.val();
             
-            // Limpa marcadores que não estão mais no banco
+            // Remove vans que saíram
             for (let id in markers) {
                 if (!data || !data[id]) {
                     map.removeLayer(markers[id]);
@@ -108,16 +122,20 @@
                 }
             }
 
-            // Adiciona ou atualiza marcadores
+            // Adiciona/Atualiza vans
             if (data) {
                 for (let id in data) {
                     const { lat, lng, nome } = data[id];
                     if (markers[id]) {
                         markers[id].setLatLng([lat, lng]);
                     } else {
-                        markers[id] = L.marker([lat, lng]).addTo(map)
-                            .bindPopup("<b>Van: " + nome + "</b><br>Em tempo real")
-                            .openPopup();
+                        markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map)
+                            .bindPopup(`
+                                <div class="van-info">
+                                    <strong>${nome}</strong><br>
+                                    <span>📍 Em tempo real</span>
+                                </div>
+                            `);
                     }
                 }
             }
