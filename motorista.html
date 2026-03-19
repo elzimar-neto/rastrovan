@@ -3,28 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Motorista - Iguaíba</title>
+    <title>Painel RastroVan 1.0</title>
     <link rel="icon" type="image/png" href="van.png">
     <style>
         body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
         .conteudo { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-        .sentido-box { margin-bottom: 25px; background: #222; padding: 15px; border-radius: 12px; border: 1px solid #333; width: 280px; }
-        .sentido-box label { display: block; margin: 15px 0; font-size: 1.2rem; cursor: pointer; }
-        input[type="radio"] { transform: scale(1.6); margin-right: 12px; }
-        #btn { width: 180px; height: 180px; border-radius: 50%; border: 6px solid #333; font-size: 1.4rem; font-weight: bold; cursor: pointer; background: #28a745; color: white; box-shadow: 0 0 20px rgba(40,167,69,0.4); }
-        #btn.active { background: #dc3545; box-shadow: 0 0 30px rgba(220,53,69,0.6); }
+        .sentido-box { margin-bottom: 20px; background: #222; padding: 15px; border-radius: 12px; width: 280px; }
+        #btn { width: 180px; height: 180px; border-radius: 50%; border: 6px solid #333; font-size: 1.4rem; font-weight: bold; cursor: pointer; background: #28a745; color: white; }
+        #btn.active { background: #dc3545; }
         .footer-motorista { background: #111; padding: 15px; font-size: 0.7rem; color: #777; text-align: center; border-top: 1px solid #333; }
-        .footer-motorista b { color: #007bff; }
     </style>
 </head>
 <body>
     <div class="conteudo">
-        <h2 id="status">Configurar Rota</h2>
+        <h2>🛰️ RastroVan 1.0</h2>
         <div class="sentido-box" id="config">
-            <label><input type="radio" name="sentido" value="Sentido Centro" checked> 🏙️ Sentido Centro</label>
+            <label><input type="radio" name="sentido" value="Sentido Centro" checked> 🏙️ Sentido Centro</label><br><br>
             <label><input type="radio" name="sentido" value="Sentido Bairro"> 🏡 Sentido Bairro</label>
         </div>
-        <button id="btn">INICIAR</button>
+        <button id="btn">INICIAR ROTA</button>
         <audio id="silentAudio" loop><source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3"></audio>
     </div>
     <div class="footer-motorista">
@@ -49,7 +46,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         let watchID = null, wakeLock = null;
-        const btn = document.getElementById('btn'), status = document.getElementById('status'), config = document.getElementById('config'), audio = document.getElementById('silentAudio');
+        const btn = document.getElementById('btn'), config = document.getElementById('config'), audio = document.getElementById('silentAudio');
 
         btn.onclick = async function() {
             if (!watchID) {
@@ -61,7 +58,6 @@
                 watchID = navigator.geolocation.watchPosition((pos) => {
                     set(ref(db, 'vans/' + nome), { lat: pos.coords.latitude, lng: pos.coords.longitude, nome: nome, sentido: sentido, timestamp: Date.now() });
                     onDisconnect(ref(db, 'vans/' + nome)).remove();
-                    status.innerHTML = `<b style="color:#28a745">${sentido}</b><br><small>${nome}</small>`;
                     btn.innerText = "PARAR"; btn.classList.add('active'); config.style.display = 'none';
                 }, (err) => console.log(err), { enableHighAccuracy: true });
             } else { location.reload(); }

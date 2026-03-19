@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vans Iguaíba - Realtime</title>
+    <title>RastroVan Iguaíba 1.0</title>
     <link rel="icon" type="image/png" href="van.png">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -15,12 +15,12 @@
         .footer { background: white; padding: 12px; text-align: center; font-size: 0.75rem; color: #555; z-index: 1000; }
         .footer b { color: #007bff; }
         .copyright { margin-top: 5px; font-size: 0.7rem; color: #888; border-top: 1px solid #eee; padding-top: 5px; }
-        .dist-label { color: #dc3545; font-weight: bold; display: block; margin-top: 2px; }
     </style>
 </head>
 <body>
     <div class="header">
-        🚐 Iguaíba ↔ Mercado Central<br>
+        🚐 <b>RastroVan Iguaíba 1.0</b><br>
+        Linha Iguaíba - Mercado Central<br>
         <button class="btn-alerta" id="btnAlerta">🔔 Me avise quando a van estiver perto</button>
     </div>
     <div id="map"></div>
@@ -49,8 +49,19 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const map = L.map('map', { minZoom: 11 }).setView([-2.5307, -44.3068], 13);
+        const map = L.map('map').setView([-2.5307, -44.3068], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // --- DESENHAR O RASTRO (ROTA FIXA) ---
+        // Exemplo de pontos (Iguaíba -> Paço -> Estrada Ribamar -> João Paulo -> Mercado)
+        const rotaPontos = [
+            [-2.4935, -44.1130], // Ponto Final Iguaíba
+            [-2.5120, -44.1550], // Paço do Lumiar
+            [-2.5250, -44.2000], // Forquilha
+            [-2.5350, -44.2500], // João Paulo
+            [-2.5290, -44.3020]  // Mercado Central
+        ];
+        const rotaLinha = L.polyline(rotaPontos, {color: '#007bff', weight: 4, opacity: 0.5, dashArray: '10, 10'}).addTo(map);
 
         const vanIcon = L.icon({ iconUrl: 'van.png', iconSize: [45, 45], iconAnchor: [22, 45], popupAnchor: [0, -45] });
         let markers = {};
@@ -61,7 +72,7 @@
             navigator.geolocation.getCurrentPosition(p => {
                 userPos = p.coords;
                 alertaAtivo = true;
-                alert("Alerta ativado! O sistema avisará quando a van estiver perto.");
+                alert("Alerta de proximidade ativado!");
                 L.marker([userPos.latitude, userPos.longitude]).addTo(map).bindPopup("Você").openPopup();
             });
         };
@@ -86,26 +97,20 @@
                     total++;
                     const { lat, lng, nome, timestamp, sentido } = data[id];
                     const diffS = Math.floor((agora - timestamp) / 1000);
-                    const tempoTexto = diffS < 60 ? `${diffS}s atrás` : `${Math.floor(diffS/60)}min atrás`;
-                    const iconeS = sentido === "Sentido Centro" ? "🏙️" : "🏡";
+                    const tempoT = diffS < 60 ? `${diffS}s atrás` : `${Math.floor(diffS/60)}min atrás`;
                     
                     let distT = "";
                     if (alertaAtivo && userPos) {
                         const d = calcDist(userPos.latitude, userPos.longitude, lat, lng);
-                        distT = `<br><span class="dist-label">Distância: ${d.toFixed(1)} km</span>`;
-                        if (d < 0.8) {
-                            if (window.navigator.vibrate) window.navigator.vibrate([300, 100, 300]);
-                            alert(`A van de ${nome} (${sentido}) está chegando!`);
-                            alertaAtivo = false;
-                        }
+                        distT = `<br><b style="color:red">Distância: ${d.toFixed(1)} km</b>`;
                     }
 
-                    const popupHTML = `<b>Van: ${nome}</b><br><b style="color:#007bff">${iconeS} ${sentido}</b><br><small>Atualizado: ${tempoTexto}${distT}</small>`;
+                    const popupH = `<b>Van: ${nome}</b><br><b style="color:#007bff">${sentido}</b><br><small>Atualizado: ${tempoT}${distT}</small>`;
 
                     if (markers[id]) {
-                        markers[id].setLatLng([lat, lng]).setPopupContent(popupHTML);
+                        markers[id].setLatLng([lat, lng]).setPopupContent(popupH);
                     } else {
-                        markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map).bindPopup(popupHTML, { autoClose: false, closeOnClick: false }).openPopup();
+                        markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map).bindPopup(popupH, { autoClose: false, closeOnClick: false }).openPopup();
                     }
                     markers[id].setOpacity(diffS > 120 ? 0.5 : 1);
                 }
