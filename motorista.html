@@ -4,23 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Motorista - Iguaíba</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="van.PNG">
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #1a1a1a; color: white; }
-        #status { font-size: 1.3rem; margin-bottom: 20px; text-align: center; color: #ccc; }
+        body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
+        .conteudo { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
         #btn { 
             width: 220px; height: 220px; border-radius: 50%; border: 8px solid #333; 
             font-size: 1.6rem; font-weight: bold; cursor: pointer; background: #28a745; color: white;
-            box-shadow: 0 0 20px rgba(40, 167, 69, 0.4); transition: 0.3s;
+            box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
         }
-        #btn.active { background: #dc3545; border-color: #551111; box-shadow: 0 0 30px rgba(220, 53, 69, 0.6); }
-        .instrucao { margin-top: 30px; font-size: 0.8rem; color: #888; padding: 0 20px; text-align: center; }
+        #btn.active { background: #dc3545; box-shadow: 0 0 30px rgba(220, 53, 69, 0.6); }
+        .footer-motorista { background: #222; padding: 15px; font-size: 0.75rem; color: #aaa; text-align: center; border-top: 1px solid #444; }
     </style>
 </head>
 <body>
-
-    <div id="status">GPS Pronto para Iniciar</div>
-    <button id="btn">INICIAR ROTA</button>
-    <p class="instrucao">Mantenha esta tela aberta durante a viagem.<br>Certifique-se de que o GPS está no modo "Alta Precisão".</p>
+    <div class="conteudo">
+        <h2 id="status">GPS Pronto</h2>
+        <button id="btn">INICIAR ROTA</button>
+    </div>
+    <div class="footer-motorista">
+        <b>Dica:</b> Coloque o telemóvel no painel para melhor sinal de GPS.<br>
+        Mantenha o carregador ligado.
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
@@ -45,33 +51,18 @@
 
         btn.onclick = function() {
             if (!watchID) {
-                const nome = prompt("Seu Nome (ex: João - Van 02):");
+                const nome = prompt("Seu Nome ou ID da Van:");
                 if (!nome) return;
-
                 watchID = navigator.geolocation.watchPosition((pos) => {
                     const vanRef = ref(db, 'vans/' + nome);
-                    set(vanRef, { 
-                        lat: pos.coords.latitude, 
-                        lng: pos.coords.longitude, 
-                        nome: nome,
-                        timestamp: Date.now()
-                    });
-                    
+                    set(vanRef, { lat: pos.coords.latitude, lng: pos.coords.longitude, nome: nome });
                     onDisconnect(vanRef).remove();
-
-                    status.innerHTML = `TRANSMITINDO AGORA:<br><b style="color:#28a745">${nome}</b>`;
-                    btn.innerText = "PARAR ROTA";
+                    status.innerHTML = `EM ROTA: <b style="color:#28a745">${nome}</b>`;
+                    btn.innerText = "PARAR";
                     btn.classList.add('active');
-                }, (err) => alert("Erro no GPS: " + err.message), 
-                { 
-                    enableHighAccuracy: true, // Força alta precisão
-                    maximumAge: 0, 
-                    timeout: 10000 
-                });
+                }, (err) => alert("Erro GPS: " + err.message), { enableHighAccuracy: true });
             } else {
-                if(confirm("Deseja parar de transmitir?")) {
-                    location.reload();
-                }
+                location.reload();
             }
         };
     </script>
