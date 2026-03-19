@@ -3,55 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vans Iguaíba - Grande Ilha</title>
-    
+    <title>Vans Iguaíba - Mapa em Tempo Real</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: #f4f7f6; }
-        #map { height: 100vh; width: 100%; position: absolute; z-index: 1; }
-        
-        /* Painel Flutuante */
-        .overlay {
-            position: absolute; top: 10px; left: 10px; right: 10px;
-            z-index: 1000; background: white; padding: 15px;
-            border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            text-align: center;
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100%; }
+        .info-box {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: white; padding: 10px 20px;
+            border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-weight: bold; color: #007bff; border: 2px solid #007bff;
         }
-
-        h2 { margin: 0 0 10px 0; font-size: 1.1rem; color: #007bff; }
-        
-        .btn-motorista {
-            background: #28a745; color: white; border: none; padding: 12px 20px;
-            border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;
-            transition: 0.3s;
-        }
-
-        .btn-motorista.active { background: #dc3545; }
-
-        /* Estilo do Balão (Popup) */
-        .leaflet-popup-content-wrapper {
-            border-radius: 8px;
-            padding: 5px;
-        }
-        .van-info { text-align: center; }
-        .van-info strong { color: #007bff; font-size: 1.1rem; }
     </style>
 </head>
 <body>
-
-    <div class="overlay">
-        <h2>🚐 Linha: Iguaíba - Mercado</h2>
-        <div id="status-area">
-            <button id="btnAction" class="btn-motorista">Sou Motorista: Iniciar Rota</button>
-        </div>
-    </div>
-
+    <div class="info-box">🚐 Vans em Tempo Real</div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD6xIqgV-XzwNScNyN6mc4l35tRJ7sc8fY",
@@ -66,76 +38,29 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // --- CONFIGURAÇÃO DO MAPA ---
         const limitesIlha = L.latLngBounds(L.latLng(-2.75, -44.50), L.latLng(-2.35, -43.90));
-        const map = L.map('map', {
-            maxBounds: limitesIlha,
-            minZoom: 11
-        }).setView([-2.5307, -44.3068], 13);
-
+        const map = L.map('map', { maxBounds: limitesIlha, minZoom: 11 }).setView([-2.5307, -44.3068], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // --- ÍCONE PERSONALIZADO DA VAN ---
         const vanIcon = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1048/1048314.png', // Ícone de Van
-            iconSize: [40, 40],
-            iconAnchor: [20, 40],
-            popupAnchor: [0, -40]
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1048/1048314.png',
+            iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -40]
         });
 
-        let watchID = null;
         let markers = {};
-        const btnAction = document.getElementById('btnAction');
 
-        // --- FUNÇÃO MOTORISTA ---
-        btnAction.addEventListener('click', () => {
-            if (!watchID) {
-                const nome = prompt("Nome do Motorista ou Placa:");
-                if (!nome) return;
-
-                btnAction.innerText = "Parar Transmissão (Em Rota)";
-                btnAction.classList.add('active');
-
-                watchID = navigator.geolocation.watchPosition((pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    const vanRef = ref(db, 'vans/' + nome);
-                    
-                    set(vanRef, { lat: latitude, lng: longitude, nome: nome });
-                    onDisconnect(vanRef).remove(); // Se fechar o navegador, remove do mapa
-                }, (err) => alert("Erro GPS: " + err.message), 
-                { enableHighAccuracy: true, maximumAge: 0 });
-
-            } else {
-                if(confirm("Deseja encerrar a transmissão?")) location.reload();
-            }
-        });
-
-        // --- FUNÇÃO PASSAGEIRO (LER VANS) ---
         onValue(ref(db, 'vans'), (snapshot) => {
             const data = snapshot.val();
-            
-            // Remove vans que saíram
             for (let id in markers) {
-                if (!data || !data[id]) {
-                    map.removeLayer(markers[id]);
-                    delete markers[id];
-                }
+                if (!data || !data[id]) { map.removeLayer(markers[id]); delete markers[id]; }
             }
-
-            // Adiciona/Atualiza vans
             if (data) {
                 for (let id in data) {
                     const { lat, lng, nome } = data[id];
-                    if (markers[id]) {
-                        markers[id].setLatLng([lat, lng]);
-                    } else {
+                    if (markers[id]) { markers[id].setLatLng([lat, lng]); }
+                    else {
                         markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map)
-                            .bindPopup(`
-                                <div class="van-info">
-                                    <strong>${nome}</strong><br>
-                                    <span>📍 Em tempo real</span>
-                                </div>
-                            `);
+                            .bindPopup(`<b>${nome}</b><br>📍 Localização exata`);
                     }
                 }
             }
