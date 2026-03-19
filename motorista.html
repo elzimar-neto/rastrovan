@@ -17,14 +17,9 @@
     <div class="conteudo">
         <h2 id="status">GPS Pronto</h2>
         <button id="btn">INICIAR ROTA</button>
-        <audio id="silentAudio" loop>
-            <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
-        </audio>
+        <audio id="silentAudio" loop><source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3"></audio>
     </div>
-    <div class="footer-motorista">
-        <b>Modo Segundo Plano Ativado:</b> O app tentará manter o GPS ativo mesmo com a tela desligada.<br>
-        Mantenha o carregador conectado.
-    </div>
+    <div class="footer-motorista"><b>Modo Anti-Bloqueio Ativo:</b> GPS rodando com áudio silencioso.</div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
@@ -49,48 +44,32 @@
         const btn = document.getElementById('btn');
         const status = document.getElementById('status');
 
-        async function ativarPersistencia() {
-            // 1. Tenta manter a tela ligada
-            if ('wakeLock' in navigator) {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-            }
-            // 2. Toca o áudio silencioso (isso engana o sistema para não suspender a aba)
-            audio.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
-        }
-
-        btn.onclick = function() {
+        btn.onclick = async function() {
             if (!watchID) {
-                const nome = prompt("Seu Nome ou ID da Van:");
+                const nome = prompt("Seu Nome/Van:");
                 if (!nome) return;
                 
-                ativarPersistencia();
+                try { 
+                    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+                    audio.play();
+                } catch (e) {}
 
                 watchID = navigator.geolocation.watchPosition((pos) => {
-                    const vanRef = ref(db, 'vans/' + nome);
-                    set(vanRef, { 
+                    set(ref(db, 'vans/' + nome), { 
                         lat: pos.coords.latitude, 
                         lng: pos.coords.longitude, 
                         nome: nome,
-                        timestamp: Date.now() 
+                        timestamp: Date.now() // ENVIA O TEMPO ATUAL
                     });
-                    onDisconnect(vanRef).remove();
-                    status.innerHTML = `TRANSMITINDO: <b style="color:#28a745">${nome}</b>`;
+                    onDisconnect(ref(db, 'vans/' + nome)).remove();
+                    status.innerHTML = `EM ROTA: <b style="color:#28a745">${nome}</b>`;
                     btn.innerText = "PARAR";
                     btn.classList.add('active');
-                }, (err) => {
-                    console.error(err);
-                }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+                }, (err) => console.log(err), { enableHighAccuracy: true, maximumAge: 0 });
             } else {
                 location.reload();
             }
         };
-
-        // Reativa o WakeLock se o motorista voltar para a aba
-        document.addEventListener('visibilitychange', () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                ativarPersistencia();
-            }
-        });
     </script>
 </body>
 </html>
