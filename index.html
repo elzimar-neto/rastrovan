@@ -6,13 +6,18 @@
     <title>Mapa de Vans - Iguaíba</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; }
+        body { margin: 0; padding: 0; font-family: sans-serif; }
         #map { height: 100vh; width: 100%; }
-        .info { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-weight: bold; }
+        .info-topo { 
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%); 
+            z-index: 1000; background: white; padding: 10px 20px; 
+            border-radius: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
+            font-weight: bold; color: #007bff; border: 2px solid #007bff;
+        }
     </style>
 </head>
 <body>
-    <div class="info">Visualizando Vans em Tempo Real</div>
+    <div class="info-topo">🚐 Vans Iguaíba - Mercado (Ao Vivo)</div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -33,24 +38,26 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // Foco inicial na Grande Ilha
-        const map = L.map('map').setView([-2.5307, -44.3068], 13);
+        // Limites da Grande Ilha
+        const limitesIlha = L.latLngBounds(L.latLng(-2.75, -44.50), L.latLng(-2.35, -43.90));
+        const map = L.map('map', { maxBounds: limitesIlha, minZoom: 11 }).setView([-2.5307, -44.3068], 13);
+        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+        // ÍCONE USANDO SUA IMAGEM LOCAL van.PNG
         const vanIcon = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1048/1048314.png',
-            iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -40]
+            iconUrl: 'van.PNG', // Se estiver em uma pasta, use 'img/van.png'
+            iconSize: [45, 45],
+            iconAnchor: [22, 45],
+            popupAnchor: [0, -45]
         });
 
         let markers = {};
 
-        // ESCUTA A PASTA 'vans' NO FIREBASE
-        const vansRef = ref(db, 'vans');
-        onValue(vansRef, (snapshot) => {
+        onValue(ref(db, 'vans'), (snapshot) => {
             const data = snapshot.val();
-            console.log("Dados recebidos do Firebase:", data); // Verifique isso no F12
-
-            // Limpa do mapa quem saiu do Firebase
+            
+            // Remove quem saiu do Firebase
             for (let id in markers) {
                 if (!data || !data[id]) {
                     map.removeLayer(markers[id]);
@@ -58,15 +65,19 @@
                 }
             }
 
-            // Atualiza ou Cria os marcadores
             if (data) {
                 for (let id in data) {
                     const { lat, lng, nome } = data[id];
                     if (markers[id]) {
                         markers[id].setLatLng([lat, lng]);
                     } else {
+                        // Cria marcador com balão fixo aberto
                         markers[id] = L.marker([lat, lng], { icon: vanIcon }).addTo(map)
-                            .bindPopup(`<b>Van: ${nome}</b>`);
+                            .bindPopup(`<b>${nome}</b>`, { 
+                                autoClose: false, 
+                                closeOnClick: false 
+                            })
+                            .openPopup();
                     }
                 }
             }
