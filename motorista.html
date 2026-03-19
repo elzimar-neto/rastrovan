@@ -3,35 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel RastroVan 1.0</title>
+    <title>Painel RastroVan 1.0 - Motorista</title>
     <link rel="icon" type="image/png" href="van.png">
     <style>
-        body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
+        body { font-family: sans-serif; margin: 0; background: #121212; color: white; display: flex; flex-direction: column; height: 100vh; }
         .conteudo { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-        .sentido-box { margin-bottom: 20px; background: #222; padding: 15px; border-radius: 12px; width: 280px; }
-        #btn { width: 180px; height: 180px; border-radius: 50%; border: 6px solid #333; font-size: 1.4rem; font-weight: bold; cursor: pointer; background: #28a745; color: white; }
-        #btn.active { background: #dc3545; }
-        .footer-motorista { background: #111; padding: 15px; font-size: 0.7rem; color: #777; text-align: center; border-top: 1px solid #333; }
+        .sentido-box { margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 15px; border: 1px solid #333; width: 280px; }
+        button { width: 100%; max-width: 250px; padding: 15px; margin: 10px 0; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        #btnRota { background: #28a745; color: white; height: 120px; border-radius: 60px; font-size: 1.2rem; }
+        #btnAprender { background: #007bff; color: white; }
+        .gravando { background: #dc3545 !important; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        .footer-motorista { background: #0a0a0a; padding: 15px; font-size: 0.7rem; color: #666; text-align: center; }
     </style>
 </head>
 <body>
     <div class="conteudo">
-        <h2>🛰️ RastroVan 1.0</h2>
+        <h2 id="status">🛰️ RastroVan 1.0</h2>
+        
         <div class="sentido-box" id="config">
-            <label><input type="radio" name="sentido" value="Sentido Centro" checked> 🏙️ Sentido Centro</label><br><br>
-            <label><input type="radio" name="sentido" value="Sentido Bairro"> 🏡 Sentido Bairro</label>
+            <label><input type="radio" name="sentido" value="Sentido Centro" checked> 🏙️ Centro</label>
+            <label style="margin-left: 15px;"><input type="radio" name="sentido" value="Sentido Bairro"> 🏡 Bairro</label>
         </div>
-        <button id="btn">INICIAR ROTA</button>
+
+        <button id="btnRota">INICIAR TRANSMISSÃO</button>
+        <button id="btnAprender">🛰️ GRAVAR NOVO TRAJETO</button>
+        
         <audio id="silentAudio" loop><source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3"></audio>
     </div>
+
     <div class="footer-motorista">
-        Desenvolvido por <b>Elzimar José de Carvalho Neto</b>.<br>
-        © Copyright 2026 | elzimar.neto@gmail.com
+        Desenvolvido por <b>Elzimar José de Carvalho Neto</b>. © 2026
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-        import { getDatabase, ref, set, onDisconnect } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
+        import { getDatabase, ref, set, push, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD6xIqgV-XzwNScNyN6mc4l35tRJ7sc8fY",
@@ -45,21 +52,53 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        let watchID = null, wakeLock = null;
-        const btn = document.getElementById('btn'), config = document.getElementById('config'), audio = document.getElementById('silentAudio');
+        let watchID = null, gravandoCaminho = false, rotaRef = null;
 
-        btn.onclick = async function() {
+        const btnRota = document.getElementById('btnRota');
+        const btnAprender = document.getElementById('btnAprender');
+        const audio = document.getElementById('silentAudio');
+
+        // Botão de Aprender Caminho
+        btnAprender.onclick = async () => {
+            if (!gravandoCaminho) {
+                if(confirm("Isso apagará a rota anterior e gravará uma nova conforme você dirige. Iniciar?")) {
+                    gravandoCaminho = true;
+                    btnAprender.innerText = "🔴 GRAVANDO CAMINHO...";
+                    btnAprender.classList.add("gravando");
+                    // Limpa a rota antiga no Firebase
+                    remove(ref(db, 'rota_aprendida'));
+                }
+            } else {
+                gravandoCaminho = false;
+                btnAprender.innerText = "🛰️ GRAVAR NOVO TRAJETO";
+                btnAprender.classList.remove("gravando");
+                alert("Gravação finalizada!");
+            }
+        };
+
+        // Botão de Iniciar Rota
+        btnRota.onclick = async function() {
             if (!watchID) {
-                const nome = prompt("Nome do Motorista:");
+                const nome = prompt("Seu Nome:");
                 if (!nome) return;
                 const sentido = document.querySelector('input[name="sentido"]:checked').value;
-                try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); audio.play(); } catch (e) {}
-                
+                audio.play();
+
                 watchID = navigator.geolocation.watchPosition((pos) => {
-                    set(ref(db, 'vans/' + nome), { lat: pos.coords.latitude, lng: pos.coords.longitude, nome: nome, sentido: sentido, timestamp: Date.now() });
+                    const { latitude, longitude } = pos.coords;
+                    
+                    // 1. Atualiza posição da Van
+                    set(ref(db, 'vans/' + nome), { lat: latitude, lng: longitude, nome: nome, sentido: sentido, timestamp: Date.now() });
                     onDisconnect(ref(db, 'vans/' + nome)).remove();
-                    btn.innerText = "PARAR"; btn.classList.add('active'); config.style.display = 'none';
-                }, (err) => console.log(err), { enableHighAccuracy: true });
+
+                    // 2. Se estiver no modo "Aprender", salva o ponto na rota
+                    if (gravandoCaminho) {
+                        push(ref(db, 'rota_aprendida'), { lat: latitude, lng: longitude });
+                    }
+
+                    btnRota.innerText = "PARAR";
+                    btnRota.style.background = "#dc3545";
+                }, (err) => alert("Erro GPS"), { enableHighAccuracy: true });
             } else { location.reload(); }
         };
     </script>
