@@ -4,16 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Motorista - Iguaíba</title>
-    <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="van.png">
     <style>
         body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
         .conteudo { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-        #btn { 
-            width: 220px; height: 220px; border-radius: 50%; border: 8px solid #333; 
-            font-size: 1.6rem; font-weight: bold; cursor: pointer; background: #28a745; color: white;
-            box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
-        }
+        #btn { width: 220px; height: 220px; border-radius: 50%; border: 8px solid #333; font-size: 1.6rem; font-weight: bold; cursor: pointer; background: #28a745; color: white; box-shadow: 0 0 20px rgba(40, 167, 69, 0.4); }
         #btn.active { background: #dc3545; box-shadow: 0 0 30px rgba(220, 53, 69, 0.6); }
         .footer-motorista { background: #222; padding: 15px; font-size: 0.75rem; color: #aaa; text-align: center; border-top: 1px solid #444; }
     </style>
@@ -22,10 +17,13 @@
     <div class="conteudo">
         <h2 id="status">GPS Pronto</h2>
         <button id="btn">INICIAR ROTA</button>
+        <audio id="silentAudio" loop>
+            <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
+        </audio>
     </div>
     <div class="footer-motorista">
-        <b>Dica:</b> Coloque o telemóvel no painel para melhor sinal de GPS.<br>
-        Mantenha o carregador ligado.
+        <b>Modo Segundo Plano Ativado:</b> O app tentará manter o GPS ativo mesmo com a tela desligada.<br>
+        Mantenha o carregador conectado.
     </div>
 
     <script type="module">
@@ -45,26 +43,54 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         let watchID = null;
+        let wakeLock = null;
+        const audio = document.getElementById('silentAudio');
 
         const btn = document.getElementById('btn');
         const status = document.getElementById('status');
+
+        async function ativarPersistencia() {
+            // 1. Tenta manter a tela ligada
+            if ('wakeLock' in navigator) {
+                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+            }
+            // 2. Toca o áudio silencioso (isso engana o sistema para não suspender a aba)
+            audio.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
+        }
 
         btn.onclick = function() {
             if (!watchID) {
                 const nome = prompt("Seu Nome ou ID da Van:");
                 if (!nome) return;
+                
+                ativarPersistencia();
+
                 watchID = navigator.geolocation.watchPosition((pos) => {
                     const vanRef = ref(db, 'vans/' + nome);
-                    set(vanRef, { lat: pos.coords.latitude, lng: pos.coords.longitude, nome: nome });
+                    set(vanRef, { 
+                        lat: pos.coords.latitude, 
+                        lng: pos.coords.longitude, 
+                        nome: nome,
+                        timestamp: Date.now() 
+                    });
                     onDisconnect(vanRef).remove();
-                    status.innerHTML = `EM ROTA: <b style="color:#28a745">${nome}</b>`;
+                    status.innerHTML = `TRANSMITINDO: <b style="color:#28a745">${nome}</b>`;
                     btn.innerText = "PARAR";
                     btn.classList.add('active');
-                }, (err) => alert("Erro GPS: " + err.message), { enableHighAccuracy: true });
+                }, (err) => {
+                    console.error(err);
+                }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
             } else {
                 location.reload();
             }
         };
+
+        // Reativa o WakeLock se o motorista voltar para a aba
+        document.addEventListener('visibilitychange', () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                ativarPersistencia();
+            }
+        });
     </script>
 </body>
 </html>
