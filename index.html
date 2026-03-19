@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mapa de Vans - Iguaíba</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="van.PNG">
+    <link rel="icon" type="image/png" href="van.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
@@ -54,7 +54,7 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const vanIcon = L.icon({
-            iconUrl: 'van.PNG',
+            iconUrl: 'van.png',
             iconSize: [45, 45], iconAnchor: [22, 45], popupAnchor: [0, -45]
         });
 
